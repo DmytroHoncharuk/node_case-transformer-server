@@ -1,6 +1,6 @@
 /*eslint-disable*/
 const http = require('http');
-const { convertToCase } = require('./convertToCase');
+const { convertToCase } = require('./convertToCase/convertToCase');
 
 function createServer() {
   return http.createServer((req, res) => {
@@ -10,11 +10,8 @@ function createServer() {
     const textToConvert = normalizedURL.pathname.slice(1);
     const caseToConvert = normalizedURL.searchParams.get('toCase');
 
-    console.log('text to Convert', textToConvert);
-    console.log('case name', caseToConvert);
-
     if (textToConvert === 'favicon.ico') {
-      res.statusCode = 204;
+      res.statusCode = 204; // No Content
       res.end();
 
       return;
@@ -23,7 +20,6 @@ function createServer() {
     if (!textToConvert) {
       errors.push({
         message:
-          // eslint-disable-next-line max-len
           'Text to convert is required. Correct request is: "/<TEXT_TO_CONVERT>?toCase=<CASE_NAME>".',
       });
     }
@@ -31,17 +27,18 @@ function createServer() {
     if (!caseToConvert) {
       errors.push({
         message:
-          // eslint-disable-next-line max-len
-          '"toCase" query param is required. Correct request is: "/<TEXT_TO_CONVERT>?toCase=<CASE_NAME>"',
+          '"toCase" query param is required. Correct request is: "/<TEXT_TO_CONVERT>?toCase=<CASE_NAME>".',
       });
     }
 
     const availableCases = ['SNAKE', 'KEBAB', 'CAMEL', 'PASCAL', 'UPPER'];
 
-    if (caseToConvert && !availableCases.includes(caseToConvert)) {
+    if (
+      caseToConvert &&
+      !availableCases.includes(caseToConvert.toUpperCase())
+    ) {
       errors.push({
         message:
-          // eslint-disable-next-line max-len
           'This case is not supported. Available cases: SNAKE, KEBAB, CAMEL, PASCAL, UPPER.',
       });
     }
@@ -49,31 +46,38 @@ function createServer() {
     if (errors.length > 0) {
       res.statusCode = 400;
       res.setHeader('Content-Type', 'application/json');
+      res.end(JSON.stringify({ errors }));
 
-      res.end(
-        JSON.stringify({ errors })
-          .replace(/\\u003C/g, '<')
-          .replace(/\\u003E/g, '>'),
-      );
+      return;
     }
 
-    const { originalCase, convertedText } = convertToCase(
-      textToConvert,
-      caseToConvert,
-    );
+    try {
+      const { originalCase, convertedText } = convertToCase(
+        textToConvert,
+        caseToConvert.toUpperCase(),
+      );
 
-    res.statusCode = 200;
-    res.setHeader('Content-Type', 'application/json');
-    res.statusMessage = 'OK';
+      res.statusCode = 200;
+      res.setHeader('Content-Type', 'application/json');
 
-    const body = {
-      originalCase: originalCase,
-      targetCase: caseToConvert,
-      originalText: textToConvert,
-      convertedText: convertedText,
-    };
+      res.end(
+        JSON.stringify({
+          originalCase,
+          targetCase: caseToConvert,
+          originalText: textToConvert,
+          convertedText,
+        }),
+      );
+    } catch (error) {
+      res.statusCode = 400;
+      res.setHeader('Content-Type', 'application/json');
 
-    res.end(JSON.stringify({ body }));
+      res.end(
+        JSON.stringify({
+          errors: [{ message: error.message }],
+        }),
+      );
+    }
   });
 }
 
